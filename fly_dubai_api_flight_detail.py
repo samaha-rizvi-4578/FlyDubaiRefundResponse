@@ -193,6 +193,7 @@ class Airlines:
 class FlyDubaiPNRResponse:
     Airlines: List[Airlines]
     Cabin: str
+    ReservationBalance: float
 #--------------------------------------------------------
 class FlyDubaiFlightService:
     def __init__(self, file):
@@ -253,8 +254,7 @@ class FlyDubaiFlightService:
         total_taxes = sum(charge.Amount for charge in passenger.Charges if charge.CodeType == 'TAX')
         return AGFareInfoDetails(
             currency_code=passenger.Charges[0].CurrencyCode,
-            total_fare=AGAmountCurrencyCovert(value=Decimal(sum(charge.Amount for charge in passenger.Charges)), currency=passenger.Charges[0].CurrencyCode),
-            base_fare=AGAmountCurrencyCovert(value=Decimal(sum(charge.Amount for charge in passenger.Charges if charge.CodeType != 'TAX')), currency=passenger.Charges[0].CurrencyCode),
+            total_fare=AGAmountCurrencyCovert(value=Decimal(self.pnr_response.ReservationBalance), currency=passenger.Charges[0].CurrencyCode),base_fare=AGAmountCurrencyCovert(value=Decimal(sum(charge.Amount for charge in passenger.Charges if charge.CodeType != 'TAX')), currency=passenger.Charges[0].CurrencyCode),
             taxes=AGAmountCurrencyCovert(value=Decimal(total_taxes), currency=passenger.Charges[0].CurrencyCode),
             fees=AGAmountCurrencyCovert(value=Decimal(sum(charge.Amount for charge in passenger.Charges if charge.CodeType not in ['TAX', 'AIR', 'PNLT'])), currency=passenger.Charges[0].CurrencyCode),
             others=AGAmountCurrencyCovert(value=Decimal(sum(charge.Amount for charge in passenger.Charges if charge.CodeType not in ['TAX', 'AIR', 'PNLT'])), currency=passenger.Charges[0].CurrencyCode)
