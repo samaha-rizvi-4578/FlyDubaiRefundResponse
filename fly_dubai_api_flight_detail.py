@@ -13,7 +13,7 @@ from datetime import datetime
 from marshmallow import fields
 from decimal import Decimal
 
-#AGAmountCurrencyCovert
+#AGAmountCurrencyCovert : represent amount and currency
 @dataclass_json
 @dataclass
 class AGAmountCurrencyCovert:
@@ -27,14 +27,15 @@ class AGAmountCurrencyCovert:
         default=None
     )
     currency: str = "PKR"
-    
+   
+#RefundTaxInfoDetails : hold tax details with tax code and amount 
 @dataclass_json
 @dataclass
 class RefundTaxInfoDetails:
     tax_code: str
     amount: AGAmountCurrencyCovert = None
 
-
+#AGSegmentDetails : contains info about flight segment
 @dataclass_json
 @dataclass
 class AGSegmentDetails:
@@ -59,21 +60,21 @@ class AGSegmentDetails:
     flight_segment_number: str
     segment_status: str = None
 
-
+#RefundCharges : represnt refund chrges
 @dataclass_json
 @dataclass
 class RefundCharges:
     base_refund: AGAmountCurrencyCovert = None
     other_charges: AGAmountCurrencyCovert = None
 
-
+# RefundFeesDetails : hold fee code and amount
 @dataclass_json
 @dataclass
 class RefundFeesDetails:
     fee_code: str
     amount: AGAmountCurrencyCovert
 
-
+#AGFareInfoDetails : contain fare infromation , including taxes and fees
 @dataclass_json
 @dataclass
 class AGFareInfoDetails:
@@ -86,7 +87,7 @@ class AGFareInfoDetails:
     fees: AGAmountCurrencyCovert = None
     others: AGAmountCurrencyCovert = None
 
-
+#AGPassengerFareDetails : contain fare details specific to a passenger
 @dataclass_json
 @dataclass
 class AGPassengerFareDetails:
@@ -95,7 +96,7 @@ class AGPassengerFareDetails:
     refund_charges: Optional[RefundCharges] = None
     status: str = None
 
-
+#AGLegDetails : represent details of leg
 @dataclass_json
 @dataclass
 class AGLegDetails:
@@ -104,7 +105,7 @@ class AGLegDetails:
     fare_detail: AGPassengerFareDetails = field(default_factory=list)
     fare_basis: str = None
 
-
+#AGPassengerDetails : represent passenger details
 @dataclass_json
 @dataclass
 class AGPassengerDetails:
@@ -116,7 +117,7 @@ class AGPassengerDetails:
     ticket_number: str = None
     leg_details: List[AGLegDetails] = field(default_factory=list)
 
-
+#AGFlightRefundResponse : represent overall refund response
 @dataclass_json
 @dataclass
 class AGFlightRefundResponse:
@@ -128,6 +129,8 @@ class AGFlightRefundResponse:
 #------------------------------------------------------------------------------------
 #------------------------------------------------------------------------------------
 #fly_dubai_api_passenger_detail.py
+#flydubai api response
+#chargesDetail : represent charges details
 @dataclass_json
 @dataclass
 class ChargesDetail:
@@ -136,6 +139,7 @@ class ChargesDetail:
     CurrencyCode: str
     TaxCode: str
 
+#FlyDubaiPassengerDetail : represent passenger details from flydubai api
 @dataclass_json
 @dataclass
 class FlyDubaiPassengerDetail:
@@ -156,6 +160,7 @@ class FlyDubaiPassengerDetail:
 #-----------------------------------------------------------------------------------
 #-----------------------------------------------------------------------------------
 #fly_dubai_api_flight_detail.py
+#customer : represent passengers
 @dataclass_json
 @dataclass
 class Customers:
@@ -187,7 +192,7 @@ class LogicalFlight:
 class Airlines:
     LogicalFlight: List[LogicalFlight]
 
-
+# FlyDubaiPNRResponse : represent overall pnr response
 @dataclass_json
 @dataclass
 class FlyDubaiPNRResponse:
@@ -198,7 +203,9 @@ class FlyDubaiPNRResponse:
 #-----------------------------------------------------------------------------------
 #fly_dubai_flight_service.py
 # samaha rizvi
+#process of reading the FlyDubai API response and mapping it to the AGFlightRefundResponse format
 class FlyDubaiFlightService:
+    # read the json file and deserialize it to FlyDubaiPNRResponse object
     def __init__(self, file):
         self.file = file
         try:
@@ -208,6 +215,7 @@ class FlyDubaiFlightService:
         except Exception as e:
             print(f"Error reading or deserializing JSON data: {e}")
 
+    #map flydubai passenger details to AGPassengerDetails
     def get_passenger_details(self, passenger):
         return AGPassengerDetails(
             first_name=passenger.FirstName,
@@ -217,7 +225,7 @@ class FlyDubaiFlightService:
             title=passenger.Title,
             ticket_number=passenger.TicketNumber,
         )
-
+    #map charges to refund charges : penalty
     def get_refund_charges(self, charges):
         for charge in charges:
             if charge.CodeType == 'PNLT':
@@ -226,6 +234,7 @@ class FlyDubaiFlightService:
                 return RefundCharges(base_refund=base_refund, other_charges=other_charges)
         return RefundCharges()
 
+    #map leg details to AGLegDetails
     def get_leg_details(self, passenger):
         return AGLegDetails(
             leg_public_id=passenger.PersonOrgID,
@@ -235,7 +244,7 @@ class FlyDubaiFlightService:
                 refund_charges=self.get_refund_charges(passenger.Charges),
             ),
         )
-
+    #map segment details to AGSegmentDetails
     def get_segment_details(self, physical_flight):
         segment_details = []
         for customer in physical_flight.Customers:
@@ -252,7 +261,7 @@ class FlyDubaiFlightService:
                     )
                 )
         return segment_details
-
+    #calculates and map fare details to AGFareInfoDetails
     def get_fare_details(self, passenger):
         total_taxes = sum(charge.Amount for charge in passenger.Charges if charge.CodeType == 'TAX')
         return AGFareInfoDetails(
@@ -299,6 +308,7 @@ class FlyDubaiFlightService:
     #                         passenger_detail.leg_details.append(leg_detail)
     #                         refund_response.passenger_details.append(passenger_detail)
     #     return refund_response
+    # process charges details : tax details and store them in hashmap
     def get_charge_details(self, passenger, tax_hashmap):
         passenger_id = passenger.PersonOrgID
         if passenger_id not in tax_hashmap:
@@ -311,36 +321,44 @@ class FlyDubaiFlightService:
                 else:
                     tax_hashmap[passenger_id][charge.TaxCode] = Decimal(charge.Amount)
 
+    #map flydubai api response to AGFlightRefundResponse
     def map_to_ag_flight_refund_response(self):
         refund_response = AGFlightRefundResponse()
         refund_response.passenger_details = []
-
         tax_hashmap = {}
+
+        # process each passenger and map to AGPassengerDetails
+        def process_passenger(passenger, physical_flight):
+            passenger_detail = self.get_passenger_details(passenger)
+            refund_charge = self.get_refund_charges(passenger.Charges)
+            leg_detail = AGLegDetails(
+                leg_public_id=passenger.PersonOrgID,
+                segment_details=self.get_segment_details(physical_flight),
+                fare_detail=AGPassengerFareDetails(
+                    public_id=passenger.PersonOrgID,
+                    refund_charges=refund_charge,
+                    fare_info=self.get_fare_details(passenger)
+                )
+            )
+            self.get_charge_details(passenger, tax_hashmap)
+            leg_detail.fare_detail.fare_info.tax_details = [
+                RefundTaxInfoDetails(
+                    tax_code=tax_code,
+                    amount=AGAmountCurrencyCovert(value=amount, currency=passenger.Charges[0].CurrencyCode)
+                ) for tax_code, amount in tax_hashmap[passenger.PersonOrgID].items()
+            ]
+            passenger_detail.leg_details.append(leg_detail)
+            refund_response.passenger_details.append(passenger_detail)
 
         for airline in self.pnr_response.Airlines:
             for logical_flight in airline.LogicalFlight:
                 for physical_flight in logical_flight.PhysicalFlights:
                     for customer in physical_flight.Customers:
                         for passenger in customer.AirlinePersons:
-                            passenger_detail = self.get_passenger_details(passenger)
-                            refund_charge = self.get_refund_charges(passenger.Charges)
-                            passenger_detail.fare_detail = AGPassengerFareDetails(
-                                public_id=passenger.PersonOrgID,
-                                refund_charges=refund_charge,
-                            )
-                            leg_detail = self.get_leg_details(passenger)
-                            leg_detail.segment_details = self.get_segment_details(physical_flight)
-                            leg_detail.fare_detail.fare_info = self.get_fare_details(passenger)
-                            self.get_charge_details(passenger, tax_hashmap)
-                            leg_detail.fare_detail.fare_info.tax_details = [
-                                RefundTaxInfoDetails(
-                                    tax_code=tax_code,
-                                    amount=AGAmountCurrencyCovert(value=amount, currency=passenger.Charges[0].CurrencyCode)
-                                ) for tax_code, amount in tax_hashmap[passenger.PersonOrgID].items()
-                            ]
-                            passenger_detail.leg_details.append(leg_detail)
-                            refund_response.passenger_details.append(passenger_detail)
+                            process_passenger(passenger, physical_flight)
+
         return refund_response
+
 # Usage
 service = FlyDubaiFlightService("D:\\OneDrive - FAST National University\\samaha\\\\aeroglobeInternship\\Task4FlyDubaiResponse\\Cancel_API _resp.json")
 response = service.map_to_ag_flight_refund_response()
@@ -367,9 +385,3 @@ for passenger in response.passenger_details:
         print(f"{key}: {value}")
     print("\n")
 
-# Print refund charges
-for passenger in response.passenger_details:
-    print(f"Passenger: {passenger.first_name} {passenger.last_name}")
-    for key, value in passenger.leg_details[0].fare_detail.refund_charges.to_dict().items():
-        print(f"{key}: {value}")
-    print("\n")
